@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Job Score Checker",
+  "version": "1.0",
+  "description": "A Chrome extension to check job scores from an Excel file.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icons/scrapy.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "128": "icons/scrapy.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}

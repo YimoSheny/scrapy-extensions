@@ -4,6 +4,7 @@
   "version": "1.0",
   "description": "A Chrome extension to check job scores from an Excel file.",
   "permissions": [
+    "scripting",
     "activeTab",
     "storage"
   ],

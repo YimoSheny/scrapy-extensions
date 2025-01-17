@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Job Score Checker",
+  "name": "Job Score Crawler",
   "version": "1.0",
-  "description": "A Chrome extension to check job scores from an Excel file.",
+  "description": "A Chrome extension to crawling job scores.",
   "permissions": [
     "scripting",
     "activeTab",

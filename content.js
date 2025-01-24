@@ -1,54 +1,113 @@
-// Log to confirm that content.js is loaded
 console.log('content.js loaded');
 
 // Listen for messages from popup.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received:', request);
 
-  const jobCodes = request.jobCodes;
-  const jobScores = [];
+  if (request.action === 'startProcessing') {
+    const jobCodes = request.jobCodes;
+    const jobScores = [];
 
-  if (!jobCodes || jobCodes.length === 0) {
-    // If jobCodes is empty, send an empty response immediately
-    sendResponse({ jobScores: [] });
+    if (!jobCodes || jobCodes.length === 0) {
+      sendResponse({ jobScores: [] });
+      return true;
+    }
+
+    // Save the jobCodes and jobScores in chrome.storage
+    chrome.storage.local.set({ 
+      jobCodes, 
+      jobScores,
+      processing: true,
+      currentIndex: 0,
+      sendResponseCallback: true
+    }, () => {
+      processNextJobCode();
+    });
+
     return true; // Keep the message channel open for async response
   }
+});
 
-  let completedCount = 0; // Track the number of completed queries
+// Function to process the next job code
+function processNextJobCode() {
+  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex'], (result) => {
+    const { jobCodes, jobScores, currentIndex } = result;
+    
+    if (currentIndex >= jobCodes.length) {
+      // Processing complete
+      chrome.storage.local.set({ processing: false }, () => {
+        sendFinalResponse(jobScores);
+      });
+      return;
+    }
 
-  // Process each job code
-  jobCodes.forEach((jobCode, index) => {
-    setTimeout(() => {
-      // Check if the input element exists
-      const checkElement = setInterval(() => {
-        const zwdmElement = document.getElementById('zwdm');
-        if (zwdmElement) {
-          // Set the job code and submit the form
-          zwdmElement.value = jobCode;
-          document.getElementById('btn_submit').click();
-          clearInterval(checkElement);
+    const jobCode = jobCodes[currentIndex];
+    
+    const checkElement = setInterval(() => {
+      const zwdmElement = document.getElementById('zwdm');
+      if (zwdmElement) {
+        zwdmElement.value = jobCode;
+        document.getElementById('btn_submit').click();
+        clearInterval(checkElement);
 
-          // Wait for the page to update and extract the score
-          setTimeout(() => {
-            const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
-            const score = scoreElement ? scoreElement.textContent : 'N/A';
-            jobScores.push(score);
-
-            completedCount++;
-
-            // If all job codes are processed, send the response
-            if (completedCount === jobCodes.length) {
-              sendResponse({ jobScores: jobScores });
-            }
-          }, 2000); // Adjust this timeout based on how long the page takes to update
-        } else {
-          // If the input element is not found, log an error and send an empty response
-          console.error(`Element with id 'zwdm' not found`);
-          sendResponse({ jobScores: [] });
-        }
-      }, 500); // Check for the element every 500ms
-    }, index * 2000); // Delay each job code processing by 2 seconds
+        // Prepare for page reload
+        chrome.storage.local.set({ 
+          currentIndex: currentIndex + 1,
+          waitingForReload: true
+        });
+      }
+    }, 500);
   });
+}
 
-  return true; // Keep the message channel open for async response
+// Function to handle page reload
+function handlePageReload() {
+  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex', 'waitingForReload'], (result) => {
+    if (result.waitingForReload) {
+      // Extract the score
+      const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
+      const score = scoreElement ? scoreElement.textContent.trim().replace(/[^\d.-]/g, '') : 'N/A';
+      
+      // Update jobScores
+      const updatedScores = [...(result.jobScores || []), score];
+      
+      chrome.storage.local.set({
+        jobScores: updatedScores,
+        waitingForReload: false
+      }, () => {
+        // Process next job code
+        processNextJobCode();
+      });
+    }
+  });
+}
+
+// Function to send final response
+function sendFinalResponse(jobScores) {
+  chrome.storage.local.get(['sendResponseCallback'], (result) => {
+    if (result.sendResponseCallback) {
+      chrome.runtime.sendMessage({
+        action: 'processingComplete',
+        jobScores: jobScores
+      });
+      
+      // Clear storage
+      chrome.storage.local.remove([
+        'jobCodes',
+        'jobScores',
+        'currentIndex',
+        'processing',
+        'sendResponseCallback'
+      ]);
+    }
+  });
+}
+
+// Check for pending tasks on page load
+window.addEventListener('load', () => {
+  chrome.storage.local.get(['processing'], (result) => {
+    if (result.processing) {
+      handlePageReload();
+    }
+  });
 });

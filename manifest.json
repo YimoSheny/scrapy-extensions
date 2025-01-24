@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Job Score Crawler",
+  "name": "Score Crawler",
   "version": "1.0",
   "description": "A Chrome extension to crawling job scores.",
   "permissions": [

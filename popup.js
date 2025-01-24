@@ -29,26 +29,54 @@ document.addEventListener('DOMContentLoaded', () => {
           if (tabs.length > 0) {
             const tabId = tabs[0].id;
 
-            // Send the job codes to content.js
-            chrome.tabs.sendMessage(tabId, { jobCodes: jobCodes }, (response) => {
-              if (chrome.runtime.lastError) {
-                // Handle errors in communication
-                console.error('Error receiving response:', chrome.runtime.lastError.message);
-              } else {
-                console.log('Job scores received:', response.jobScores);
+            // Update UI to show processing status
+            document.getElementById('status').textContent = 'Processing...';
+            document.getElementById('processButton').disabled = true;
+
+            // Send the job codes to content.js with the new format
+            chrome.tabs.sendMessage(tabId, { 
+              action: 'startProcessing',
+              jobCodes: jobCodes 
+            }, (response) => {
+              // if (chrome.runtime.lastError) {
+              //   // Handle errors in communication
+              //   console.error('Error receiving response:', chrome.runtime.lastError.message);
+              //   // document.getElementById('status').textContent = 'Error processing job codes';
+              //   document.getElementById('processButton').disabled = true;
+              // }
+            });
+
+            // Listen for processing complete message
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+              if (message.action === 'processingComplete') {
+                console.log('Job scores received:', message.jobScores);
+                document.getElementById('status').textContent = 'Processing complete';
+                document.getElementById('processButton').disabled = false;
+
+                // Add header for scores column if it doesn't exist
+                const headerRow = 1; // Assuming headers are in second row 
+                const lastColumnIndex = jsonData[2].length;
+                const scoreHeaderCell = XLSX.utils.encode_cell({ r: headerRow, c: lastColumnIndex });
+                if (!worksheet[scoreHeaderCell]) {
+                  worksheet[scoreHeaderCell] = { v: 'Score' };
+                }
 
                 // Insert scores into the last column of the worksheet
-                const lastColumnIndex = jsonData[2].length; // Use the third row to determine the number of columns
-                response.jobScores.forEach((score, index) => {
-                  const rowIndex = index + 2; // Start from the third row (index 2)
-                  const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: lastColumnIndex });
-                  worksheet[cellAddress] = { v: score };
-                });
+                try {
+                  message.jobScores.forEach((score, index) => {
+                    const rowIndex = index + 2; // Start from the third row (index 2)
+                    const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: lastColumnIndex });
+                    worksheet[cellAddress] = { v: score, t: 'n' }; // 'n' for number type
+                  });
 
-                // Save the updated workbook to a new file
-                const newWorkbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(newWorkbook, worksheet, sheetName);
-                XLSX.writeFile(newWorkbook, 'JobScores.xlsx');
+                  // Save the updated workbook to a new file
+                  const newWorkbook = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(newWorkbook, worksheet, sheetName);
+                  XLSX.writeFile(newWorkbook, 'JobScores.xlsx');
+                } catch (error) {
+                  console.error('Error writing scores to Excel:', error);
+                  document.getElementById('status').textContent = 'Error saving scores';
+                }
                 console.log('Job scores saved to JobScores.xlsx');
               }
             });

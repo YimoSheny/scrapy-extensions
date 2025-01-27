@@ -1,6 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Add click event listener for quit button
+  document.getElementById('quitButton').addEventListener('click', () => {
+    chrome.storage.local.set({ shouldStop: true }, () => {
+      document.getElementById('status').textContent = 'Processing stopped';
+      document.getElementById('processButton').disabled = false;
+      document.getElementById('quitButton').disabled = true;
+    });
+  });
+
   // Add a click event listener to the process button
   document.getElementById('processButton').addEventListener('click', () => {
+    // Enable quit button and disable process button
+    document.getElementById('quitButton').disabled = false;
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
 

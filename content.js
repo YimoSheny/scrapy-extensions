@@ -62,22 +62,63 @@ function processNextJobCode() {
 
 // Function to handle page reload
 function handlePageReload() {
-  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex', 'waitingForReload'], (result) => {
+  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex', 'waitingForReload', 'shouldStop'], (result) => {
+    if (result.shouldStop) {
+      // Clean up and stop processing
+      chrome.storage.local.remove([
+        'jobCodes',
+        'jobScores',
+        'currentIndex',
+        'processing',
+        'sendResponseCallback',
+        'waitingForReload',
+        'shouldStop'
+      ]);
+      return;
+    }
+
     if (result.waitingForReload) {
-      // Extract the score
-      const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
-      const score = scoreElement ? scoreElement.textContent.trim().replace(/[^\d.-]/g, '') : 'N/A';
-      
-      // Update jobScores
-      const updatedScores = [...(result.jobScores || []), score];
-      
-      chrome.storage.local.set({
-        jobScores: updatedScores,
-        waitingForReload: false
-      }, () => {
-        // Process next job code
-        processNextJobCode();
+      // Use MutationObserver to wait for score element
+      const observer = new MutationObserver((mutations, obs) => {
+        const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
+        if (scoreElement) {
+          obs.disconnect();
+          
+          // Extract the score
+          const score = scoreElement.textContent.trim().replace(/[^\d.-]/g, '');
+          
+          // Update jobScores
+          const updatedScores = [...(result.jobScores || []), score];
+          
+          chrome.storage.local.set({
+            jobScores: updatedScores,
+            waitingForReload: false
+          }, () => {
+            // Process next job code
+            processNextJobCode();
+          });
+        }
       });
+
+      // Start observing the document body
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+
+      // Set timeout as fallback
+      setTimeout(() => {
+        observer.disconnect();
+        const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
+        const score = scoreElement ? scoreElement.textContent.trim().replace(/[^\d.-]/g, '') : 'N/A';
+        
+        chrome.storage.local.set({
+          jobScores: [...(result.jobScores || []), score],
+          waitingForReload: false
+        }, () => {
+          processNextJobCode();
+        });
+      }, 10000); // 10 second timeout
     }
   });
 }

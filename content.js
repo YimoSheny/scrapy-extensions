@@ -1,5 +1,8 @@
 console.log('content.js loaded');
 
+// 新增：每批次处理的数量
+const BATCH_SIZE = 10;
+
 // Listen for messages from popup.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received:', request);
@@ -19,7 +22,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       jobScores,
       processing: true,
       currentIndex: 0,
-      sendResponseCallback: true
+      sendResponseCallback: true,
+      // 新增：当前批次的起始索引
+      currentBatchStart: 0
     }, () => {
       processNextJobCode();
     });
@@ -30,14 +35,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Function to process the next job code
 function processNextJobCode() {
-  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex'], (result) => {
-    const { jobCodes, jobScores, currentIndex } = result;
+  chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex', 'currentBatchStart'], (result) => {
+    const { jobCodes, jobScores, currentIndex, currentBatchStart } = result;
     
-    if (currentIndex >= jobCodes.length) {
-      // Processing complete
-      chrome.storage.local.set({ processing: false }, () => {
-        sendFinalResponse(jobScores);
-      });
+    // 新增：检查是否处理完当前批次
+    if (currentIndex >= currentBatchStart + BATCH_SIZE || currentIndex >= jobCodes.length) {
+      // 处理完当前批次，更新批次起始索引
+      if (currentIndex < jobCodes.length) {
+        chrome.storage.local.set({ 
+          currentBatchStart: currentBatchStart + BATCH_SIZE 
+        }, () => {
+          // 随机延迟，范围在2-5秒
+          const randomDelay = Math.floor(Math.random() * (5000 - 2000 + 1) + 2000);
+          setTimeout(processNextJobCode, randomDelay);
+        });
+      } else {
+        // Processing complete
+        chrome.storage.local.set({ processing: false }, () => {
+          sendFinalResponse(jobScores);
+        });
+        return;
+      }
       return;
     }
 
@@ -72,7 +90,8 @@ function handlePageReload() {
         'processing',
         'sendResponseCallback',
         'waitingForReload',
-        'shouldStop'
+        'shouldStop',
+        'currentBatchStart' // 新增：移除批次起始索引
       ]);
       return;
     }
@@ -118,7 +137,7 @@ function handlePageReload() {
         }, () => {
           processNextJobCode();
         });
-      }, 10000); // 10 second timeout
+      }, 3500); // 3.5 second timeout
     }
   });
 }
@@ -138,7 +157,8 @@ function sendFinalResponse(jobScores) {
         'jobScores',
         'currentIndex',
         'processing',
-        'sendResponseCallback'
+        'sendResponseCallback',
+        'currentBatchStart' // 新增：移除批次起始索引
       ]);
     }
   });

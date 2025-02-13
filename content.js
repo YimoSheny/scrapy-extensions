@@ -60,6 +60,28 @@ function processNextJobCode() {
   });
 }
 
+// Function to monitor URL changes
+function monitorURLChanges() {
+  const targetURL = 'https://fuwu.rsj.beijing.gov.cn/gwy/publicQuery/msrymd';
+  const homeURL = 'https://fuwu.rsj.beijing.gov.cn/gwy/main';
+
+  setInterval(() => {
+    if (window.location.href === homeURL) {
+      window.location.href = targetURL;
+    }
+  }, 1000);
+}
+
+// Function to select the required option
+function selectRequiredOption() {
+  const selectElement = document.getElementById('mslb');
+  if (selectElement) {
+    selectElement.value = '1';
+    const event = new Event('change', { bubbles: true });
+    selectElement.dispatchEvent(event);
+  }
+}
+
 // Function to handle page reload
 function handlePageReload() {
   chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex', 'waitingForReload', 'shouldStop'], (result) => {
@@ -106,7 +128,7 @@ function handlePageReload() {
         subtree: true
       });
 
-      // Set timeout as fallback
+      const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1) + 1000);
       setTimeout(() => {
         observer.disconnect();
         const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
@@ -118,7 +140,7 @@ function handlePageReload() {
         }, () => {
           processNextJobCode();
         });
-      }, 10000); // 10 second timeout
+      }, randomDelay);
     }
   });
 }
@@ -146,6 +168,10 @@ function sendFinalResponse(jobScores) {
 
 // Check for pending tasks on page load
 window.addEventListener('load', () => {
+  // Start monitoring URL changes
+  monitorURLChanges();
+  // Select the required option after reload
+  selectRequiredOption();
   chrome.storage.local.get(['processing'], (result) => {
     if (result.processing) {
       handlePageReload();

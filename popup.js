@@ -8,7 +8,12 @@ function splitJobCodesIntoBatches(jobCodes, batchSize) {
 }
 
 // Function to process job codes in batches
-function processJobCodesInBatches(jobCodes, batchSize, callback) {
+function processJobCodesInBatches(worksheet, batchSize, callback) {
+  // Convert the worksheet to JSON
+  const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+  const lastColumnIndex = jsonData[2].length;
+  // Extract job codes starting from the third row (index 2)
+  const jobCodes = jsonData.slice(2).map(row => row[1]);
   const batches = splitJobCodesIntoBatches(jobCodes, batchSize);
   let results = [];
   let currentBatch = 0;
@@ -41,6 +46,7 @@ function processJobCodesInBatches(jobCodes, batchSize, callback) {
               console.log('Job scores received:', message.jobScores);
               results = results.concat(message.jobScores);
               setTimeout(processNextBatch, Math.random() * 5000 + 1000); // Random wait between 1 and 5 seconds
+              wirteExcelFile();
             }
           });
         } else {
@@ -50,6 +56,32 @@ function processJobCodesInBatches(jobCodes, batchSize, callback) {
       
   }
 
+  function wirteExcelFile() {
+    // Add header for scores column if it doesn't exist
+    const headerRow = 1; // Assuming headers are in second row 
+    const scoreHeaderCell = XLSX.utils.encode_cell({ r: headerRow, c: lastColumnIndex });
+    if (!worksheet[scoreHeaderCell]) {
+      worksheet[scoreHeaderCell] = { v: 'Score' };
+    }
+
+    // Insert scores into the last column of the worksheet
+    try {
+      message.jobScores.forEach((score, index) => {
+        const rowIndex = (currentBatch - 1) * batchSize + index + 2; // Start from the third row (index 2)
+        const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: lastColumnIndex });
+        worksheet[cellAddress] = { v: score, t: 'n' }; // 'n' for number type
+      });
+
+      // Save the updated workbook to a new file
+      const newWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(newWorkbook, worksheet, sheetName);
+      XLSX.writeFile(newWorkbook, `JobScores_${currentBatch}.xlsx`);
+      console.log('Job scores saved to JobScores.xlsx');
+    } catch (error) {
+      console.error('Error writing scores to Excel:', error);
+      document.getElementById('status').textContent = 'Error saving scores';
+    }
+  }
   processNextBatch();
 }
 
@@ -84,41 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
-        // Convert the worksheet to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        // Extract job codes starting from the third row (index 2)
-        const jobCodes = jsonData.slice(2).map(row => row[1]);
-        const batchSize = 150;
-        processJobCodesInBatches(jobCodes, batchSize, (allResults) => {
+        
+        const batchSize = 100;
+        processJobCodesInBatches(worksheet, batchSize, (allResults) => {
           document.getElementById('status').textContent = 'Processing complete';
           document.getElementById('processButton').disabled = false;
           console.log('All results:', allResults);
-          // Add header for scores column if it doesn't exist
-          const headerRow = 1; // Assuming headers are in second row 
-          const lastColumnIndex = jsonData[2].length;
-          const scoreHeaderCell = XLSX.utils.encode_cell({ r: headerRow, c: lastColumnIndex });
-          if (!worksheet[scoreHeaderCell]) {
-            worksheet[scoreHeaderCell] = { v: 'Score' };
-          }
-
-          // Insert scores into the last column of the worksheet
-          try {
-            allResults.forEach((score, index) => {
-              const rowIndex = index + 2; // Start from the third row (index 2)
-              const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: lastColumnIndex });
-              worksheet[cellAddress] = { v: score, t: 'n' }; // 'n' for number type
-            });
-
-            // Save the updated workbook to a new file
-            const newWorkbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(newWorkbook, worksheet, sheetName);
-            XLSX.writeFile(newWorkbook, 'JobScores.xlsx');
-            console.log('Job scores saved to JobScores.xlsx');
-          } catch (error) {
-            console.error('Error writing scores to Excel:', error);
-            document.getElementById('status').textContent = 'Error saving scores';
-          }
         });
       };
       // Read the file as an array buffer

@@ -33,6 +33,7 @@ function processNextJobCode() {
   chrome.storage.local.get(['jobCodes', 'jobScores', 'currentIndex'], (result) => {
     const { jobCodes, jobScores, currentIndex } = result;
     
+    console.log('Current index:', currentIndex);
     if (currentIndex >= jobCodes.length) {
       // Processing complete
       chrome.storage.local.set({ processing: false }, () => {
@@ -65,11 +66,12 @@ function monitorURLChanges() {
   const targetURL = 'https://fuwu.rsj.beijing.gov.cn/gwy/publicQuery/msrymd';
   const homeURL = 'https://fuwu.rsj.beijing.gov.cn/gwy/main';
 
-  setInterval(() => {
+  const checkURL = setInterval(() => {
     if (window.location.href === homeURL) {
       window.location.href = targetURL;
+      clearInterval(checkURL);
     }
-  }, 1000);
+  }, 10000);
 }
 
 // Function to select the required option
@@ -128,7 +130,7 @@ function handlePageReload() {
         subtree: true
       });
 
-      const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1) + 1000);
+      const randomDelay = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000);
       setTimeout(() => {
         observer.disconnect();
         const scoreElement = document.querySelector('tbody tr:nth-child(2) td:nth-child(4)');
